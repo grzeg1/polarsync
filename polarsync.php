@@ -72,6 +72,10 @@ $datefile = $local_file_dir . 'lastfiled.dat'; //to store timestamp of last file
 
 $last_file_date = file_get_contents($datefile);
 
+date_default_timezone_set('UTC');
+$offset = str_replace(':', '', $tz_fix_offset);
+$newtz = new DateTimezone(timezone_name_from_abbr(null, $offset * 36, false));
+
 foreach ($activity_arr as $activity) {
     if ($activity->type == 'EXERCISE') { //don't care about other data
         echo $activity->url . '... ';
@@ -81,43 +85,64 @@ foreach ($activity_arr as $activity) {
 
         if ($date > $last_file_date) { //skip files we already have
 
-            $tcxurl = 'https://flow.polar.com' . $activity->url . '/export/tcx';
+            $tcxzipurl = 'https://flow.polar.com' . $activity->url . '/export/tcx';
 
-            echo 'fetching ' . $tcxurl . "... ";
-            curl_setopt($ch, CURLOPT_URL, $tcxurl); //fetch TCX
-            $tcx = curl_exec($ch);
+            echo 'fetching ' . $tcxzipurl . "... ";
+            curl_setopt($ch, CURLOPT_URL, $tcxzipurl); //fetch TCX
+            $tcxzip = curl_exec($ch);
             echo 'done';
+            $zipfilename = tempnam('/tmp/', 'polarsync');
+            file_put_contents($zipfilename, $tcxzip);
 
-            $fixedtcx = preg_replace('/\\.(...)Z/', '.\\1' . $tz_fix_offset, $tcx); //correct timezone
+            $zip = new ZipArchive();
+            if (!$zip->open($zipfilename)) echo 'ERROR';
 
-            if (preg_match('/<Activity Sport="Running">/', $tcx)) { //upload only Running
-                $tcxname = $date . '_x_Running.tcx';
-                $tcxnamewdir = $local_file_dir . $tcxname;
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $tcxname = $zip->getNameIndex($i);
 
-                file_put_contents($tcxnamewdir, $fixedtcx); // save file locally
+                $sporttype = strtr(substr($tcxname, 25), '_', '-');
 
-                echo ' saved... Uploading...';
+                $t = date_create_from_format('Y-m-d\TH-i-s.uP', substr($tcxname, 0, 24));
+                $t->setTimezone($newtz);
+                $tcxname = date_format($t, 'Y-m-d\TH:i') . '_x_' . $sporttype;
 
-                $f = fopen($tcxnamewdir, "rb"); //upload to Droopbox
-                $result = $dbxClient->uploadFile($dropbox_dir . $tcxname, dbx\WriteMode::force(), $f);
-                fclose($f);
+                $tcx = $zip->getFromIndex($i);
 
-                echo ' uploaded... ';
+                $fixedtcx = preg_replace('/\\.(...)Z/', '.\\1' . $tz_fix_offset, $tcx); //correct timezone
 
-            } else { //other types we just save
+                if (preg_match('/<Activity Sport="Running">/', $tcx)) { //upload only Running
+                    //    $tcxname = $date . '_x_Running.tcx';
+                    $tcxnamewdir = $local_file_dir . $tcxname;
 
-                $tcxname = $date . '_x_Other.tcx';
-                $tcxnamewdir = $local_file_dir . $tcxname;
+                    file_put_contents($tcxnamewdir, $fixedtcx); // save file locally
 
-                file_put_contents($tcxnamewdir, $fixedtcx); //save file locally
+                    echo ' saved... Uploading...';
 
-                echo ' saved... ';
+                    $f = fopen($tcxnamewdir, "rb"); //upload to Droopbox
+                    // $result = $dbxClient->uploadFile($dropbox_dir . $tcxname, dbx\WriteMode::force(), $f);
+                    fclose($f);
 
+                    echo ' uploaded... ';
+
+                } else { //other types we just save
+
+                    //  $tcxname = $date . '_x_Other.tcx';
+                    $tcxnamewdir = $local_file_dir . $tcxname;
+
+                    file_put_contents($tcxnamewdir, $fixedtcx); //save file locally
+
+                    echo ' saved... ';
+
+                }
             }
+
 
             file_put_contents($datefile, $date); // mark timestamp of last file we got
 
             echo PHP_EOL;
+
+            unlink($zipfilename);
+
         } else { //skip files we already have
             echo 'skipped' . PHP_EOL;
         }
