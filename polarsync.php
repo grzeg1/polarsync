@@ -119,7 +119,7 @@ foreach ($activity_arr as $activity) {
                     echo ' saved... Uploading...';
 
                     $f = fopen($tcxnamewdir, "rb"); //upload to Droopbox
-                    // $result = $dbxClient->uploadFile($dropbox_dir . $tcxname, dbx\WriteMode::force(), $f);
+                    $result = $dbxClient->uploadFile($dropbox_dir . $tcxname, dbx\WriteMode::force(), $f);
                     fclose($f);
 
                     echo ' uploaded... ';
