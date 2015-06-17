@@ -85,7 +85,7 @@ foreach ($activity_arr as $activity) {
 
         if ($date > $last_file_date) { //skip files we already have
 
-            $tcxzipurl = 'https://flow.polar.com' . $activity->url . '/export/tcx';
+            $tcxzipurl = 'https://flow.polar.com' . $activity->url . '/export/tcx/true';
 
             echo 'fetching ' . $tcxzipurl . "... ";
             curl_setopt($ch, CURLOPT_URL, $tcxzipurl); //fetch TCX
